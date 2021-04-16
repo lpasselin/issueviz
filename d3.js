@@ -12918,7 +12918,7 @@
           if (r) for (i = 0; i < n; ++i) children[i].r -= r;
 
           const radiusFromChildren = e + r;
-          const radiusFromStrength = node.data.radius || 0;
+          const radiusFromStrength = node.data.radius + r || 0;
           node.r = max(radiusFromChildren, radiusFromStrength);
         }
       };
