@@ -12,7 +12,7 @@ let color = d3.scaleLinear()
 
 (async () => {
     // main
-    await Papa.parse("/issues_matrix_small.csv", {
+    await Papa.parse("issues_matrix_small.csv", {
         download: true,
         complete: processCsvDataToGlobalsAndPlot,
         header: true,
