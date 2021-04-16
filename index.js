@@ -1,18 +1,96 @@
 'use strict';
+let issueMap;
+let stakeholderMap;
 
-Papa.parse("/issues_matrix_small.csv", {
-	download: true,
-    complete: processData,
-    header: true,
-});
-function processData(r) {
+(async () => {
+    // main
+    Papa.parse("/issues_matrix_small.csv", {
+        download: true,
+        complete: processCsvDataToGlobals,
+        header: true,
+    });
+})()
+
+function processCsvDataToGlobals(r) {
     if (r.errors.length) {
         console.log("error obtaining csv data or parsing.");
         console.log(r.errors);
-        return;
+        return undefined;
     }
     console.log(r.data);
+    let dataRaw = r.data;
+    let stakeholderIndex = dataRaw.findIndex(row => row["#Issue"] === "#Stakeholders");
+    let stakeholders = dataRaw
+        .slice(stakeholderIndex, dataRaw.length)
+        .filter(row => !row["#Issue"].startsWith("#"))
+        .filter(row => row["#Issue"].trim().length != 0);
+    let issues = dataRaw
+        .slice(0, stakeholderIndex)
+        .filter(row => !row["#Issue"].startsWith("#"))
+        .filter(row => row["#Issue"].trim().length != 0);
+
+    // stakehodlerMap is global and contains everything we need for stakeholders
+    stakeholderMap = new Map();
+    for(const stakeholder of stakeholders){
+        let name = stakeholder["#Issue"];
+        stakeholderMap.set(name, stakeholder);
+        stakeholder["name"] = name;
+        stakeholder["weight"] = stakeholder["Sub to"];
+        delete stakeholder["#Issue"];
+        delete stakeholder["Sub to"];
+        delete stakeholder["ID"];  // not filled in csv;
+    }
+
+
+    // issueMap is global and contains all data we would need.
+    // Needs to be transformed into simpler object before passing to d3
+    issueMap = new Map();
+    for(const issue of issues) {
+        issueMap.set(issue["#Issue"], "burp");
+    }
+    let issueMapNames =[...issueMap.keys()];
+    // init root node
+    issueMap.set(issueMapNames[0], { parent: null, children: [], radius: 1, });
+    // init rest of the tree
+    for(const issue of issues.slice(1)) {
+        let parentKey = issueMapNames[parseInt(issue["Sub to"])];
+        let parent = issueMap.get(parentKey);
+        let node = {
+            name: issue["#Issue"],
+            parent: parent,
+            children: [],
+            radius: 1,  // TODO compute from data later
+            csv_row: issue,
+        };
+        issueMap.set(issue["#Issue"], node);
+        parent.children.push(issueMap.get(issue["#Issue"]));
+    }
 }
+
+function simplifyIssueMapForD3(theMap) {
+    let theMapNames = [...theMap.keys()];
+    let dataNode = {
+        name: theMapNames[0],
+        children: []
+    }
+    let mapNode = theMap.get(theMapNames[0]);
+
+    function recursiveAddChildrenData(mapNode, dataNode) {
+        let hasChildren = false;
+        for (const mapChild of mapNode.children) {
+            let dataChild = { name: mapChild["name"], children: [] };
+            recursiveAddChildrenData(mapChild, dataChild);
+            dataNode.children.push(dataChild);
+            hasChildren = true;
+        }
+
+        dataNode["value"] = mapNode.radius;
+        
+    }
+    recursiveAddChildrenData(mapNode, dataNode);
+    return dataNode;
+}
+
 
 //////////////////////////
 // chart = {
@@ -105,74 +183,6 @@ function processData(r) {
 // return div.node();
 //   }
 
-// // TODO add file to repo
-// data_raw = FileAttachment("Issues_matrix_small.csv").csv();
-// stakeholder_index = data_raw.findIndex(row => row["#Issue"] === "#Stakeholders");
-// stakeholders = data_raw
-//     .slice(stakeholder_index, data_raw.length)
-//     .filter(row => !row["#Issue"].startsWith("#"))
-//     .filter(row => row["#Issue"].trim().length != 0);
-// issues = data_raw
-//     .slice(0, stakeholder_index)
-//     .filter(row => !row["#Issue"].startsWith("#"))
-//     .filter(row => row["#Issue"].trim().length != 0);
-
-// // issueMap contains all data we would need.
-// // Needs to be transformed into simpler object before passing to d3
-// issueMap = {
-//     let theMap = new Map();
-
-//     for(const issue of issues) {
-//         theMap.set(issue["#Issue"], "burp");
-//     }
-    
-//     let theMapNames =[...theMap.keys()];
-//     // init root
-//     theMap.set(theMapNames[0], { parent: null, children: [], radius: 1, });
-//     // init rest of the tree
-//     for(const issue of issues.slice(1)) {
-//     let parentKey = theMapNames[parseInt(issue["Sub to"])];
-//     let parent = theMap.get(parentKey);
-//     let node = {
-//         name: issue["#Issue"],
-//         parent: parent,
-//         children: [],
-//         radius: 1,  // TODO compute from children later
-//         csv_row: issue,
-//     };
-//     theMap.set(issue["#Issue"], node);
-//     parent.children.push(theMap.get(issue["#Issue"]));
-// }
-// return theMap;
-//   }
-
-// function simplifyIssueMapForD3(theMap) {
-//     let theMapNames = [...theMap.keys()];
-//     let dataNode = {
-//         name: theMapNames[0],
-//         children: []
-//     }
-//     let mapNode = theMap.get(theMapNames[0]);
-
-//     function recursiveAddChildrenData(mapNode, dataNode) {
-//         let hasChildren = false;
-//         for (const mapChild of mapNode.children) {
-//             let dataChild = { name: mapChild["name"], children: [] };
-//             recursiveAddChildrenData(mapChild, dataChild);
-//             dataNode.children.push(dataChild);
-//             hasChildren = true;
-//         }
-//         // if (!hasChildren) {
-//         //   delete dataNode.children
-//         //   // radius of leaf is set here.
-//         //   // Only leaves have radius for now.
-//         //   dataNode["value"] = mapNode.radius;
-//         // }
-//         dataNode["value"] = mapNode.radius;
-//     }
-//     recursiveAddChildrenData(mapNode, dataNode);
-//     return dataNode;
-// }
 
 // pack = data => d3.pack()
 //     .size([width, height])
