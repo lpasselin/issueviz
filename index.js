@@ -40,6 +40,7 @@ function processCsvDataToGlobalsAndPlot(r) {
 
     // stakehodlerMap is global and contains everything we need for stakeholders
     stakeholderMap = new Map();
+    stakeholderMap.set("No Stakeholder", {name: "No Stakeholder"});
     for(const stakeholder of stakeholders){
         let name = stakeholder["#Issue"];
         stakeholderMap.set(name, stakeholder);
@@ -124,10 +125,13 @@ function chart() {
     let focus = root;
     let view;
 
-    var myData = [
-        { name: 'a', value: 1 },
-        { name: 'b', value: 2 },
-    ]
+    var myData = [];
+    for(const stakeholder of stakeholderMap.values()){
+        myData.push({
+            name: stakeholder.name,
+            value: stakeholder.name,
+        });
+    }
     
     var select = div.append("div")
         .style("display", "block")
