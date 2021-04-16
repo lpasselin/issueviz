@@ -65,15 +65,32 @@ function processCsvDataToGlobalsAndPlot(r) {
     for(const issue of issues.slice(1)) {
         let parentKey = issueMapNames[parseInt(issue["Sub to"])];
         let parent = issueMap.get(parentKey);
+        let name = issue["#Issue"];
         let node = {
-            name: issue["#Issue"],
+            name: name,
             parent: parent,
             children: [],
-            radius: 1,  // TODO compute from data later
+            influenceSum: 0,  // TODO compute from data later
             csv_row: issue,
         };
-        issueMap.set(issue["#Issue"], node);
-        parent.children.push(issueMap.get(issue["#Issue"]));
+        issueMap.set(name, node);
+        parent.children.push(issueMap.get(name));
+
+        // sum influences in my row
+        for(const otherIssueName of issueMapNames){
+            let influence = parseInt(issue[otherIssueName]);
+            if (influence) {
+                node.influenceSum += influence;
+            }
+        }
+
+        // sum influences in other rows
+        for(const otherIssue of issues.slice(1)){
+            let influence = parseInt(otherIssue[name]);
+            if (influence) {
+                node.influenceSum += influence;
+            }
+        }
     }
     chart();
 }
@@ -94,8 +111,9 @@ function simplifyIssueMapForD3(theMap) {
             dataNode.children.push(dataChild);
             hasChildren = true;
         }
-
-        dataNode["value"] = mapNode.radius;
+        dataNode["area"] = mapNode.influenceSum;
+        dataNode["radius"] = Math.sqrt(mapNode.influenceSum/Math.PI);
+        dataNode["value"] = dataNode["area"];
         
     }
     recursiveAddChildrenData(mapNode, dataNode);
