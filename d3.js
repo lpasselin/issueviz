@@ -12916,7 +12916,10 @@
           if (r) for (i = 0; i < n; ++i) children[i].r += r;
           e = packEnclose(children);
           if (r) for (i = 0; i < n; ++i) children[i].r -= r;
-          node.r = e + r;
+
+          const radiusFromChildren = e + r;
+          const radiusFromStrength = node.data.radius || 0;
+          node.r = max(radiusFromChildren, radiusFromStrength);
         }
       };
     }

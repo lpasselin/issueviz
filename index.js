@@ -104,12 +104,10 @@ function simplifyIssueMapForD3(theMap) {
     let mapNode = theMap.get(theMapNames[0]);
 
     function recursiveAddChildrenData(mapNode, dataNode) {
-        let hasChildren = false;
         for (const mapChild of mapNode.children) {
             let dataChild = { name: mapChild["name"], children: [] };
             recursiveAddChildrenData(mapChild, dataChild);
             dataNode.children.push(dataChild);
-            hasChildren = true;
         }
         dataNode["area"] = mapNode.influenceSum;
         dataNode["radius"] = Math.sqrt(mapNode.influenceSum/Math.PI);
