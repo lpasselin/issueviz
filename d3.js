@@ -12857,7 +12857,7 @@
     }
     
     function defaultRadius(d) {
-      return Math.sqrt(d.value);
+      return Math.sqrt(d.value / Math.PI);
     }
     
     function index$1() {
