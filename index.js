@@ -79,7 +79,7 @@ function processCsvDataToGlobalsAndPlot(r) {
         parent.children.push(issueMap.get(name));
 
         // sum influences in my row
-        for(const otherIssueName of issueMapNames){
+        for(const otherIssueName of issueMapNames.values()){
             let influence = parseInt(issue[otherIssueName]);
             if (influence) {
                 node.influenceSum += influence;
