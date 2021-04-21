@@ -1,5 +1,6 @@
 'use strict';
-let issueMap;
+let issueMap; // name to issue data
+let issueMapNames; // id to name
 let stakeholderMap;
 
 let width = 400;
@@ -12,7 +13,7 @@ let color = d3.scaleLinear()
 
 (async () => {
     // main
-    await Papa.parse("issues_matrix_small.csv", {
+    await Papa.parse("issues_matrix.csv", {
         download: true,
         complete: processCsvDataToGlobalsAndPlot,
         header: true,
@@ -55,15 +56,16 @@ function processCsvDataToGlobalsAndPlot(r) {
     // issueMap is global and contains all data we would need.
     // Needs to be transformed into simpler object before passing to d3
     issueMap = new Map();
+    issueMapNames = new Map();
     for(const issue of issues) {
         issueMap.set(issue["#Issue"], "burp");
+        issueMapNames.set(issue["ID"], issue["#Issue"]);
     }
-    let issueMapNames =[...issueMap.keys()];
     // init root node
-    issueMap.set(issueMapNames[0], { parent: null, children: [], radius: 1, });
+    issueMap.set(issueMapNames.get("0"), { parent: null, children: [], radius: 1, });
     // init rest of the tree
     for(const issue of issues.slice(1)) {
-        let parentKey = issueMapNames[parseInt(issue["Sub to"])];
+        let parentKey = issueMapNames.get(issue["Sub to"]);
         let parent = issueMap.get(parentKey);
         let name = issue["#Issue"];
         let node = {
