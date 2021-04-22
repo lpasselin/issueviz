@@ -43,15 +43,19 @@ let color = d3.scaleLinear()
     .range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
     .interpolate(d3.interpolateHcl);
 
-(async () => {
-    // main
-    await Papa.parse("issues_matrix.csv", {
+
+async function parseDataFile(filename) {
+    return await Papa.parse(filename, {
         download: true,
         complete: processCsvDataToGlobalsAndPlot,
         header: true,
     });
-})()
+}
 
+async function handleFilePicked() {
+    const myFile = this.files[0]; 
+    await parseDataFile(myFile);
+}
 
 function processCsvDataToGlobalsAndPlot(r) {
     if (r.errors.length) {
@@ -191,6 +195,9 @@ function setIssueMapD3Node(d){
 
 
 function chart() {
+
+    // document.write("here 2");
+
     // TODO split init and drawing code. To enable drawing from somewhere else.
     // currently, it removes the old div and creates a new one
     d3.select("#chart").remove();
@@ -317,4 +324,11 @@ function chart() {
             .on("start", function (d) { if (d.parent === focus) this.style.display = "inline"; })
             .on("end", function (d) { if (d.parent !== focus) this.style.display = "none"; });
     }
+
+}
+
+function main() {
+    parseDataFile("issues_matrix.csv");
+    const inputElement = document.getElementById("input");
+    inputElement.addEventListener("change", handleFilePicked, false);
 }
