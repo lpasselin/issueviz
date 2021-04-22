@@ -192,12 +192,14 @@ function chart() {
     let _node = svg.append("g");
     const relations = svg.append("g");
     
-    const node = _node.selectAll("circle")
+    _node = _node.selectAll("circle")
         .data(root.descendants().slice(1))
         .join("circle")
+        .attr("id", d=> `circle_${d.data.name}`)
         .attr("fill", d => d.children ? color(d.depth) : "white")
         .attr("pointer-events", d => !d.children ? "none" : null)
-        .on("mouseover", function () {
+
+    const node = _node.on("mouseover", function () {
             d3.select(this).attr("stroke", "#000"); 
             let d = d3.select(this).data()[0];
             if (d.depth == 0){
@@ -216,23 +218,32 @@ function chart() {
                 }
                 let d1 = issue["d3Node"];
                 let d2 = otherIssue["d3Node"];
-                if (d2 === undefined){
-                    continue;
-                }
-                let x1, y1, x2, y2;
-                x1 = (d1.x - view[0]) * k;
-                x2 = (d2.x - view[0]) * k;
-                y1 = (d1.y - view[1]) * k;
-                y2 = (d2.y - view[1]) * k;
-                relations.append("path")
-                    .attr("d", d3.line()([[x1, y1], [x2, y2]]))
-                    .attr("stroke", "black")
-                    .attr("stroke-width", strength)
-                    .attr('opacity', 0.5);
+
+                d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", "#000").attr("stroke-width", strength).attr("stroke-opacity", 0.3);
             }
         })
         .on("mouseout", function () {
-            d3.select(this).attr("stroke", null);
+            d3.select(this).attr("stroke", null); 
+            let d = d3.select(this).data()[0];
+            if (d.depth == 0){
+                return;
+            }
+            let issueName = d.data.name;
+            let issue = issueMap.get(issueName);
+            for (const otherIssueName of issueMapNames.values()) {
+                let otherIssue = issueMap.get(otherIssueName);
+                if (issueName === otherIssueName) {
+                    continue;
+                }
+                let strength = parseInt(issue.csv_row[otherIssueName]);
+                if (!strength) {
+                    continue
+                }
+                let d1 = issue["d3Node"];
+                let d2 = otherIssue["d3Node"];
+
+                d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", null).attr("stroke-width", 1).attr("stroke-opacity", 1);;
+            }
             relations.html("");
         })
         .on("click", (event, d) => focus !== d && (zoom(event, d), event.stopPropagation()));
@@ -259,12 +270,7 @@ function chart() {
         k = width / v[2];
 
         label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
-        node.attr("transform", d => {
-            // for (const relation of d.data.relations){
-            //     relation.attr('transform', `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
-            // }
-            return `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`
-        });
+        node.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
         node.attr("r", d => d.r * k);
     }
 
