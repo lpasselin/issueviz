@@ -2,6 +2,38 @@
 let issueMap; // name to issue data
 let issueMapNames; // id to name
 let stakeholderMap;
+var GUI;
+var config;
+const urlParams = new URLSearchParams(window.location.search);
+console.log(urlParams.get("show relations"));
+urlParams.set("test", 1);
+
+
+function updateUrl(){
+    for (const [key, value] of Object.entries(config)){
+        urlParams.set(key, value);
+    }
+    history.pushState(urlParams, "Issues viz", urlParams);
+}
+
+function setConfigFromUrlParams() {
+    for (const [key, value] of Object.entries(urlParams)){
+        config.set(key, value);
+    }
+}
+
+
+document.addEventListener("DOMContentLoaded", function(event) { 
+    GUI = new dat.gui.GUI({hideable: true});
+    setConfigFromUrlParams();
+    GUI.add(config, "show relations")
+        .onChange(function() {
+            config.set("show relations", this.getValue());
+            updateUrl();
+        });
+});
+
+
 
 let width = 400;
 let height = 400;
@@ -74,25 +106,38 @@ function processCsvDataToGlobalsAndPlot(r) {
             children: [],
             influenceSum: 0,  // TODO compute from data later
             csv_row: issue,
+            relations: {}
         };
         issueMap.set(name, node);
         parent.children.push(issueMap.get(name));
-
-        // sum influences in my row
-        for(const otherIssueName of issueMapNames.values()){
-            let influence = parseInt(issue[otherIssueName]);
-            if (influence) {
-                node.influenceSum += influence;
-                // node[otherIssueName] = influence;
-            }
+    }
+        // sum influences
+    for(const issueName of issueMapNames.values()){
+        let issue = issueMap.get(issueName);
+        if (issue === undefined){
+            continue;
         }
-
-        // sum influences in other rows
-        for(const otherIssue of issues.slice(1)){
-            let influence = parseInt(otherIssue[name]);
+        for(const otherIssueName of issueMapNames.values()){
+            if (issueName === otherIssueName){
+                continue
+            }
+            let otherIssue = issueMap.get(otherIssueName);
+            let influence;
+            // 1) check if issue has relation to otherIssue
+            influence = parseInt(issue.csv_row[otherIssueName]);
             if (influence) {
-                node.influenceSum += influence;
-                // otherIssue[name] = influence;
+                issue.influenceSum += influence;
+                issue.relations[otherIssueName] = influence;
+                // node[otherIssueName] = influence;
+                continue;
+            }
+            // check if otherIssue has relation to issue
+            influence = parseInt(otherIssue.csv_row[issueName]);
+            if (influence) {
+                issue.influenceSum += influence;
+                issue.relations[otherIssueName] = influence;
+                // node[otherIssueName] = influence;
+                continue;
             }
         }
     }
@@ -117,6 +162,7 @@ function simplifyIssueMapForD3(theMap) {
         dataNode["radius"] = Math.sqrt(mapNode.influenceSum/Math.PI);
         dataNode["value"] = dataNode["area"];
         dataNode["name"] = mapNode.name;
+        dataNode["relations"] = mapNode["relations"];
     }
     recursiveAddChildrenData(mapNode, dataNode);
     return dataNode;
@@ -207,18 +253,7 @@ function chart() {
             }
             let issueName = d.data.name;
             let issue = issueMap.get(issueName);
-            for (const otherIssueName of issueMapNames.values()) {
-                let otherIssue = issueMap.get(otherIssueName);
-                if (issueName === otherIssueName) {
-                    continue;
-                }
-                let strength = parseInt(issue.csv_row[otherIssueName]);
-                if (!strength) {
-                    continue
-                }
-                let d1 = issue["d3Node"];
-                let d2 = otherIssue["d3Node"];
-
+            for (const [otherIssueName, strength] of Object.entries(issue.relations)){
                 d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", "#000").attr("stroke-width", strength).attr("stroke-opacity", 0.3);
             }
         })
@@ -230,18 +265,7 @@ function chart() {
             }
             let issueName = d.data.name;
             let issue = issueMap.get(issueName);
-            for (const otherIssueName of issueMapNames.values()) {
-                let otherIssue = issueMap.get(otherIssueName);
-                if (issueName === otherIssueName) {
-                    continue;
-                }
-                let strength = parseInt(issue.csv_row[otherIssueName]);
-                if (!strength) {
-                    continue
-                }
-                let d1 = issue["d3Node"];
-                let d2 = otherIssue["d3Node"];
-
+            for (const [otherIssueName, strength] of Object.entries(issue.relations)){
                 d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", null).attr("stroke-width", 1).attr("stroke-opacity", 1);;
             }
             relations.html("");
