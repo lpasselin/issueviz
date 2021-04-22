@@ -62,7 +62,7 @@ function processCsvDataToGlobalsAndPlot(r) {
         issueMapNames.set(issue["ID"], issue["#Issue"]);
     }
     // init root node
-    issueMap.set(issueMapNames.get("0"), { parent: null, children: [], radius: 1, });
+    issueMap.set(issueMapNames.get("0"), { parent: null, children: [], radius: 1, influenceSum: 0, csv_row: issues[0]});
     // init rest of the tree
     for(const issue of issues.slice(1)) {
         let parentKey = issueMapNames.get(issue["Sub to"]);
@@ -83,6 +83,7 @@ function processCsvDataToGlobalsAndPlot(r) {
             let influence = parseInt(issue[otherIssueName]);
             if (influence) {
                 node.influenceSum += influence;
+                // node[otherIssueName] = influence;
             }
         }
 
@@ -91,6 +92,7 @@ function processCsvDataToGlobalsAndPlot(r) {
             let influence = parseInt(otherIssue[name]);
             if (influence) {
                 node.influenceSum += influence;
+                // otherIssue[name] = influence;
             }
         }
     }
@@ -114,7 +116,7 @@ function simplifyIssueMapForD3(theMap) {
         dataNode["area"] = mapNode.influenceSum;
         dataNode["radius"] = Math.sqrt(mapNode.influenceSum/Math.PI);
         dataNode["value"] = dataNode["area"];
-        
+        dataNode["name"] = mapNode.name;
     }
     recursiveAddChildrenData(mapNode, dataNode);
     return dataNode;
@@ -129,6 +131,19 @@ function pack(data) {
         .sort((a, b) => b.value - a.value));
 }
 
+function setOpacityAll(objects, opacity) {
+    for (const obj of objects) {
+        obj.attr("opacity", opacity);
+    }
+}
+
+function setIssueMapD3Node(d){
+    if (!d.depth) {return;}
+    issueMap.get(d.data.name)["d3Node"] = d;
+}
+
+
+
 function chart() {
     // TODO split init and drawing code. To enable drawing from somewhere else.
     // currently, it removes the old div and creates a new one
@@ -142,6 +157,7 @@ function chart() {
     const root = pack(simplifyIssueMapForD3(issueMap));
     let focus = root;
     let view;
+    let k;
 
     var myData = [];
     for(const stakeholder of stakeholderMap.values()){
@@ -173,15 +189,57 @@ function chart() {
         .style("cursor", "pointer")
         .on("click", (event) => zoom(event, root));
 
-    const node = svg.append("g")
-        .selectAll("circle")
+    let _node = svg.append("g");
+    const relations = svg.append("g");
+    
+    const node = _node.selectAll("circle")
         .data(root.descendants().slice(1))
         .join("circle")
         .attr("fill", d => d.children ? color(d.depth) : "white")
         .attr("pointer-events", d => !d.children ? "none" : null)
-        .on("mouseover", function () { d3.select(this).attr("stroke", "#000"); })
-        .on("mouseout", function () { d3.select(this).attr("stroke", null); })
+        .on("mouseover", function () {
+            d3.select(this).attr("stroke", "#000"); 
+            let d = d3.select(this).data()[0];
+            if (d.depth == 0){
+                return;
+            }
+            let issueName = d.data.name;
+            let issue = issueMap.get(issueName);
+            for (const otherIssueName of issueMapNames.values()) {
+                let otherIssue = issueMap.get(otherIssueName);
+                if (issueName === otherIssueName) {
+                    continue;
+                }
+                let strength = parseInt(issue.csv_row[otherIssueName]);
+                if (!strength) {
+                    continue
+                }
+                let d1 = issue["d3Node"];
+                let d2 = otherIssue["d3Node"];
+                if (d2 === undefined){
+                    continue;
+                }
+                let x1, y1, x2, y2;
+                x1 = (d1.x - view[0]) * k;
+                x2 = (d2.x - view[0]) * k;
+                y1 = (d1.y - view[1]) * k;
+                y2 = (d2.y - view[1]) * k;
+                relations.append("path")
+                    .attr("d", d3.line()([[x1, y1], [x2, y2]]))
+                    .attr("stroke", "black")
+                    .attr("stroke-width", strength)
+                    .attr('opacity', 0.5);
+            }
+        })
+        .on("mouseout", function () {
+            d3.select(this).attr("stroke", null);
+            relations.html("");
+        })
         .on("click", (event, d) => focus !== d && (zoom(event, d), event.stopPropagation()));
+
+        // add relationship lines
+    root.each(d => setIssueMapD3Node(d));
+
 
     const label = svg.append("g")
         .style("font", "10px sans-serif")
@@ -197,12 +255,16 @@ function chart() {
     zoomTo([root.x, root.y, root.r * 2]);
 
     function zoomTo(v) {
-        const k = width / v[2];
-
         view = v;
+        k = width / v[2];
 
         label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
-        node.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
+        node.attr("transform", d => {
+            // for (const relation of d.data.relations){
+            //     relation.attr('transform', `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
+            // }
+            return `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`
+        });
         node.attr("r", d => d.r * k);
     }
 
