@@ -5,24 +5,29 @@ let stakeholderMap;
 var GUI;
 var stakeholderDropdownController;
 var config = {
-    "show relations": true,
+    "load file": function(){document.getElementById("input").click()},
     "stakeholder": "None",
-    "load file": function(){document.getElementById("input").click()}
+    "show relations": true,
+    "chart size": 400,
+    "area multiplier": 1,
+    "font size em": 1,
 };
 
 document.addEventListener("DOMContentLoaded", function(event) { 
     GUI = new dat.gui.GUI({hideable: true});
     GUI.add(config, "show relations");
     GUI.add(config, "load file");
+    GUI.add(config, "chart size", 0, 2000).onChange(function(v){chart();});
+    GUI.add(config, "area multiplier", 0.01, 10).onChange(function(v){chart();});
+    GUI.add(config, "font size em", 0.01, 10).onChange(function(v){chart();});
 });
 
 
 let width;
 let height;
-let chartSize = 400;
 function setChartWidthHeight() {
     let chartAspectRatio = (Math.max(window.innerWidth, window.innerHeight) / Math.min(window.innerWidth, window.innerHeight));
-    let smallest = chartSize;
+    let smallest = config["chart size"];
     let biggest = Math.trunc(smallest * chartAspectRatio);
 
     if (window.innerWidth > window.innerHeight) {
@@ -40,12 +45,12 @@ setChartWidthHeight();
 let format = d3.format(",d");
 let colorDepth = d3.scaleLinear()
     .domain([0, 5])
-    .range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
-    .interpolate(d3.interpolateHcl);
+    .range(["white", "skyblue"])
+    .interpolate(d3.interpolate);
 let colorStakeholder = d3.scaleLinear()
-    .domain([-10, 0, 10])
-    .range(["red", "white", "green"])
-    .interpolate(d3.interpolateHcl);
+    .domain([-10, -9, 0, 10])
+    .range(["red", "red", "white", "chartreuse"])
+    .interpolate(d3.interpolate);
 
 
 async function parseDataFile(filename) {
@@ -87,25 +92,6 @@ function processCsvDataToGlobalsAndPlot(r) {
         .slice(0, stakeholderIndex)
         .filter(row => !row["#Issue"].startsWith("#"))
         .filter(row => row["#Issue"].trim().length != 0);
-
-    // stakehodlerMap is global and contains everything we need for stakeholders
-    stakeholderMap = new Map();
-    stakeholderMap.set("None", {name: "None"});
-    for(const stakeholder of stakeholders){
-        let name = stakeholder["#Issue"];
-        stakeholderMap.set(name, stakeholder);
-        stakeholder["name"] = name;
-        stakeholder["weight"] = stakeholder["Sub to"];
-        delete stakeholder["#Issue"];
-        delete stakeholder["Sub to"];
-        delete stakeholder["ID"];  // not filled in csv;
-    }
-
-    let stakeholderDropdownValues = {};
-    for(const stakeholder of stakeholderMap.values()){
-        stakeholderDropdownValues[stakeholder.name] = stakeholder.name;
-    }
-    setStakeholderDropdown(stakeholderDropdownValues);
 
     // issueMap is global and contains all data we would need.
     // Needs to be transformed into simpler object before passing to d3
@@ -163,6 +149,33 @@ function processCsvDataToGlobalsAndPlot(r) {
             }
         }
     }
+
+    // stakehodlerMap is global and contains everything we need for stakeholders
+    stakeholderMap = new Map();
+    stakeholderMap.set("None", {name: "None"});
+    for(const stakeholder of stakeholders){
+        let name = stakeholder["#Issue"];
+        let node = {
+            name: name,
+            weight: stakeholder["Sub to"],
+            id: stakeholder["ID"],
+            relations: {}
+        }
+        for (const otherIssueName of issueMapNames.values()){
+            let strength = parseInt(stakeholder[otherIssueName]);
+            if (!strength){
+                strength = 0;
+            }
+            node.relations[otherIssueName] = strength;
+        }
+        stakeholderMap.set(name, node);
+    }
+
+    let stakeholderDropdownValues = {};
+    for(const stakeholder of stakeholderMap.values()){
+        stakeholderDropdownValues[stakeholder.name] = stakeholder.name;
+    }
+    setStakeholderDropdown(stakeholderDropdownValues);
     chart();
 }
 
@@ -180,7 +193,7 @@ function simplifyIssueMapForD3(theMap) {
             recursiveAddChildrenData(mapChild, dataChild);
             dataNode.children.push(dataChild);
         }
-        dataNode["area"] = mapNode.influenceSum;
+        dataNode["area"] = mapNode.influenceSum * config["area multiplier"];
         dataNode["radius"] = Math.sqrt(mapNode.influenceSum/Math.PI);
         dataNode["value"] = dataNode["area"];
         dataNode["name"] = mapNode.name;
@@ -249,7 +262,7 @@ function chart() {
     }
     else {
         console.log(stakeholder)
-        _node = _node.attr("fill", d => parseInt(stakeholder[d.name]) ? colorStakeholder(parseInt(stakeholder[d.name])) : "white" )
+        _node = _node.attr("fill", d => {console.log(d.data.name, stakeholder.relations[d.data.name]); return colorStakeholder(stakeholder.relations[d.data.name])})
     }
 
     const node = _node.on("mouseover", function () {
@@ -287,7 +300,7 @@ function chart() {
 
 
     const label = svg.append("g")
-        .style("font", "1em sans-serif")
+        .style("font", `${config["font size em"]}em sans-serif`)
         // .style("text-shadow", "white 0 0 0.25em")
         .style("fill", "black")
         .attr("pointer-events", "none")
@@ -303,7 +316,7 @@ function chart() {
 
     function zoomTo(v) {
         view = v;
-        k = chartSize / v[2];
+        k = config["chart size"] / v[2];
 
         label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
         node.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
