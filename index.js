@@ -3,40 +3,40 @@ let issueMap; // name to issue data
 let issueMapNames; // id to name
 let stakeholderMap;
 var GUI;
-var config;
-const urlParams = new URLSearchParams(window.location.search);
-console.log(urlParams.get("show relations"));
-urlParams.set("test", 1);
-
-
-function updateUrl(){
-    for (const [key, value] of Object.entries(config)){
-        urlParams.set(key, value);
-    }
-    history.pushState(urlParams, "Issues viz", urlParams);
-}
-
-function setConfigFromUrlParams() {
-    for (const [key, value] of Object.entries(urlParams)){
-        config.set(key, value);
-    }
-}
-
+var stakeholderDropdownController;
+var config = {
+    "show relations": true,
+    "stakeholder": "None",
+    "load file": function(){document.getElementById("input").click()}
+};
 
 document.addEventListener("DOMContentLoaded", function(event) { 
     GUI = new dat.gui.GUI({hideable: true});
-    setConfigFromUrlParams();
-    GUI.add(config, "show relations")
-        .onChange(function() {
-            config.set("show relations", this.getValue());
-            updateUrl();
-        });
+    GUI.add(config, "show relations");
+    GUI.add(config, "load file");
 });
 
 
+let width;
+let height;
+let chartSize = 400;
+function setChartWidthHeight() {
+    let chartAspectRatio = (Math.max(window.innerWidth, window.innerHeight) / Math.min(window.innerWidth, window.innerHeight));
+    let smallest = chartSize;
+    let biggest = Math.trunc(smallest * chartAspectRatio);
 
-let width = 400;
-let height = 400;
+    if (window.innerWidth > window.innerHeight) {
+        width = biggest;
+        height = smallest;
+    }
+    else {
+        width = smallest;
+        height = biggest;
+    }
+}
+setChartWidthHeight();
+
+
 let format = d3.format(",d");
 let color = d3.scaleLinear()
     .domain([0, 5])
@@ -55,6 +55,14 @@ async function parseDataFile(filename) {
 async function handleFilePicked() {
     const myFile = this.files[0]; 
     await parseDataFile(myFile);
+}
+
+function setStakeholderDropdown(dropdownContent) {
+    if (stakeholderDropdownController) {
+        GUI.remove(stakeholderDropdownController)
+    }
+    config["stakeholder"] = "None";
+    stakeholderDropdownController = GUI.add(config, "stakeholder", dropdownContent);
 }
 
 function processCsvDataToGlobalsAndPlot(r) {
@@ -77,7 +85,7 @@ function processCsvDataToGlobalsAndPlot(r) {
 
     // stakehodlerMap is global and contains everything we need for stakeholders
     stakeholderMap = new Map();
-    stakeholderMap.set("No Stakeholder", {name: "No Stakeholder"});
+    stakeholderMap.set("None", {name: "None"});
     for(const stakeholder of stakeholders){
         let name = stakeholder["#Issue"];
         stakeholderMap.set(name, stakeholder);
@@ -87,6 +95,12 @@ function processCsvDataToGlobalsAndPlot(r) {
         delete stakeholder["Sub to"];
         delete stakeholder["ID"];  // not filled in csv;
     }
+
+    let stakeholderDropdownValues = {};
+    for(const stakeholder of stakeholderMap.values()){
+        stakeholderDropdownValues[stakeholder.name] = stakeholder.name;
+    }
+    setStakeholderDropdown(stakeholderDropdownValues);
 
 
     // issueMap is global and contains all data we would need.
@@ -195,43 +209,19 @@ function setIssueMapD3Node(d){
 
 
 function chart() {
-
-    // document.write("here 2");
-
-    // TODO split init and drawing code. To enable drawing from somewhere else.
-    // currently, it removes the old div and creates a new one
-    d3.select("#chart").remove();
-    const div = d3.select("body")
+    d3.select("#chart").html("");
+    const div = d3.select("#chart")
         .append('div')
         .attr("id", "chart")
         .style("background-color", "red")
-        .style("max-width", "90vh");
+        // .style("max-height", "95vh")
+        // .style("max-width", "95vh")
+        .style("display", "inline-block");
 
     const root = pack(simplifyIssueMapForD3(issueMap));
     let focus = root;
     let view;
     let k;
-
-    var myData = [];
-    for(const stakeholder of stakeholderMap.values()){
-        myData.push({
-            name: stakeholder.name,
-            value: stakeholder.name,
-        });
-    }
-    
-    var select = div.append("div")
-        .style("display", "block")
-        .append("select")
-        .attr("id", "some_id")
-        .attr("onchange", d => d);
-
-    select.selectAll("option")
-        .data(myData).enter()
-        .append("option")
-        .html(function (d) {
-            return d.name;
-        });
 
     const svg = div.append("svg").style("display", "block")
         .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
@@ -253,15 +243,17 @@ function chart() {
         .attr("pointer-events", d => !d.children ? "none" : null)
 
     const node = _node.on("mouseover", function () {
-            d3.select(this).attr("stroke", "#000"); 
-            let d = d3.select(this).data()[0];
-            if (d.depth == 0){
-                return;
-            }
-            let issueName = d.data.name;
-            let issue = issueMap.get(issueName);
-            for (const [otherIssueName, strength] of Object.entries(issue.relations)){
-                d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", "#000").attr("stroke-width", strength).attr("stroke-opacity", 0.3);
+            d3.select(this).attr("stroke", "#000");
+            if (config["show relations"]){
+                let d = d3.select(this).data()[0];
+                if (d.depth == 0){
+                    return;
+                }
+                let issueName = d.data.name;
+                let issue = issueMap.get(issueName);
+                for (const [otherIssueName, strength] of Object.entries(issue.relations)){
+                    d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", "#000").attr("stroke-width", strength).attr("stroke-opacity", 0.3);
+                }
             }
         })
         .on("mouseout", function () {
@@ -284,7 +276,9 @@ function chart() {
 
 
     const label = svg.append("g")
-        .style("font", "10px sans-serif")
+        .style("font", "1em sans-serif")
+        // .style("text-shadow", "white 0 0 0.25em")
+        .style("fill", "black")
         .attr("pointer-events", "none")
         .attr("text-anchor", "middle")
         .selectAll("text")
@@ -298,7 +292,7 @@ function chart() {
 
     function zoomTo(v) {
         view = v;
-        k = width / v[2];
+        k = chartSize / v[2];
 
         label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
         node.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
