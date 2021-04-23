@@ -38,9 +38,13 @@ setChartWidthHeight();
 
 
 let format = d3.format(",d");
-let color = d3.scaleLinear()
+let colorDepth = d3.scaleLinear()
     .domain([0, 5])
     .range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
+    .interpolate(d3.interpolateHcl);
+let colorStakeholder = d3.scaleLinear()
+    .domain([-10, 0, 10])
+    .range(["red", "white", "green"])
     .interpolate(d3.interpolateHcl);
 
 
@@ -63,6 +67,7 @@ function setStakeholderDropdown(dropdownContent) {
     }
     config["stakeholder"] = "None";
     stakeholderDropdownController = GUI.add(config, "stakeholder", dropdownContent);
+    stakeholderDropdownController.onChange(function (value){chart();})
 }
 
 function processCsvDataToGlobalsAndPlot(r) {
@@ -101,7 +106,6 @@ function processCsvDataToGlobalsAndPlot(r) {
         stakeholderDropdownValues[stakeholder.name] = stakeholder.name;
     }
     setStakeholderDropdown(stakeholderDropdownValues);
-
 
     // issueMap is global and contains all data we would need.
     // Needs to be transformed into simpler object before passing to d3
@@ -211,8 +215,6 @@ function setIssueMapD3Node(d){
 function chart() {
     d3.select("#chart").html("");
     const div = d3.select("#chart")
-        .append('div')
-        .attr("id", "chart")
         .style("background-color", "red")
         // .style("max-height", "95vh")
         // .style("max-width", "95vh")
@@ -227,8 +229,8 @@ function chart() {
         .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
         .style("display", "block")
         .attr("preserveAspectRatio", "xMinYMin meet")
-        .style("margin", "0 -14px")
-        .style("background", color(0))
+        .style("margin", "0 0 0 0")
+        .style("background", colorDepth(0))
         .style("cursor", "pointer")
         .on("click", (event) => zoom(event, root));
 
@@ -239,11 +241,19 @@ function chart() {
         .data(root.descendants().slice(1))
         .join("circle")
         .attr("id", d=> `circle_${d.data.name}`)
-        .attr("fill", d => d.children ? color(d.depth) : "white")
-        .attr("pointer-events", d => !d.children ? "none" : null)
+        .attr("pointer-events", d => !d.children ? "none" : null);
+    
+    let stakeholder = stakeholderMap.get(config.stakeholder);
+    if (stakeholder.name == "None") {
+        _node = _node.attr("fill", d => d.children ? colorDepth(d.depth) : "white")
+    }
+    else {
+        console.log(stakeholder)
+        _node = _node.attr("fill", d => parseInt(stakeholder[d.name]) ? colorStakeholder(parseInt(stakeholder[d.name])) : "white" )
+    }
 
     const node = _node.on("mouseover", function () {
-            d3.select(this).attr("stroke", "#000");
+            d3.select(this).attr("stroke", "black").attr("stroke-opacity", 1).attr("stroke-width", 2);
             if (config["show relations"]){
                 let d = d3.select(this).data()[0];
                 if (d.depth == 0){
@@ -257,7 +267,7 @@ function chart() {
             }
         })
         .on("mouseout", function () {
-            d3.select(this).attr("stroke", null); 
+            d3.select(this).attr("stroke", "black").attr("stroke-width", 1).attr("stroke-opacity", 0.2); 
             let d = d3.select(this).data()[0];
             if (d.depth == 0){
                 return;
@@ -265,11 +275,12 @@ function chart() {
             let issueName = d.data.name;
             let issue = issueMap.get(issueName);
             for (const [otherIssueName, strength] of Object.entries(issue.relations)){
-                d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", null).attr("stroke-width", 1).attr("stroke-opacity", 1);;
+                d3.select(document.getElementById(`circle_${otherIssueName}`)).attr("stroke", "black").attr("stroke-width", 1).attr("stroke-opacity", 0.2);
             }
             relations.html("");
         })
-        .on("click", (event, d) => focus !== d && (zoom(event, d), event.stopPropagation()));
+        .on("click", (event, d) => focus !== d && (zoom(event, d), event.stopPropagation()))
+        .attr("stroke", "black").attr("stroke-width", 1).attr("stroke-opacity", 0.2)
 
         // add relationship lines
     root.each(d => setIssueMapD3Node(d));
